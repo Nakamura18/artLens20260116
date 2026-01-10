@@ -29,21 +29,50 @@ export class GoogleSheetsService {
   }
 
   private async fetchSheetData(spreadsheetId: string, range: string): Promise<any[]> {
-    if (!this.hasApiKey()) {
-      console.warn("Google API Key not configured. Using fallback data.");
-      return [];
+    // APIキーがある場合はGoogle Sheets APIを使用
+    if (this.hasApiKey()) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${API_KEY}`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`Failed to fetch ${range}: ${response.status} ${response.statusText}`);
+          // APIキーがあるが失敗した場合は、CSVフォールバックを試す
+          return await this.fetchSheetDataCSV(spreadsheetId, range);
+        }
+        const data = await response.json();
+        return data.values || [];
+      } catch (error) {
+        console.error(`Error fetching sheet range ${range}:`, error);
+        // エラー時もCSVフォールバックを試す
+        return await this.fetchSheetDataCSV(spreadsheetId, range);
+      }
     }
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${API_KEY}`;
+    
+    // APIキーがない場合はCSVエクスポートを使用（公開スプレッドシートの場合）
+    return await this.fetchSheetDataCSV(spreadsheetId, range);
+  }
+
+  private async fetchSheetDataCSV(spreadsheetId: string, range: string): Promise<any[]> {
+    // 範囲からシート名を抽出（例: 'art!A2:H' -> 'art'）
+    const sheetName = range.split('!')[0];
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
+    
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        console.warn(`Failed to fetch ${range}: ${response.status} ${response.statusText}`);
+        console.warn(`Failed to fetch CSV for ${range}: ${response.status} ${response.statusText}`);
         return [];
       }
-      const data = await response.json();
-      return data.values || [];
+      const csvText = await response.text();
+      // CSVをパース（簡易版）
+      const lines = csvText.split('\n').filter(line => line.trim());
+      return lines.map(line => {
+        // CSVの各行をカンマで分割（簡易パース、引用符内のカンマは考慮しない）
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        return values;
+      });
     } catch (error) {
-      console.error(`Error fetching sheet range ${range}:`, error);
+      console.error(`Error fetching CSV for ${range}:`, error);
       return [];
     }
   }

@@ -54,8 +54,17 @@ export class GoogleSheetsService {
 
   private async fetchSheetDataCSV(spreadsheetId: string, range: string): Promise<any[]> {
     // 範囲からシート名を抽出（例: 'art!A2:H' -> 'art'）
-    const sheetName = range.split('!')[0];
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
+    let sheetName = range.split('!')[0];
+    // シート名がない場合は空文字（最初のシート）
+    if (!sheetName || sheetName === range) {
+      sheetName = '';
+    }
+    
+    // CSVエクスポートURL（シート名がある場合は指定、ない場合は最初のシート）
+    let url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
+    if (sheetName) {
+      url += `&sheet=${encodeURIComponent(sheetName)}`;
+    }
     
     try {
       const response = await fetch(url);
@@ -64,11 +73,27 @@ export class GoogleSheetsService {
         return [];
       }
       const csvText = await response.text();
-      // CSVをパース（簡易版）
+      // CSVをパース（改善版：引用符内のカンマを考慮）
       const lines = csvText.split('\n').filter(line => line.trim());
-      return lines.map(line => {
-        // CSVの各行をカンマで分割（簡易パース、引用符内のカンマは考慮しない）
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      // 範囲がA2以降の場合は最初の行（ヘッダー）をスキップ
+      const startRow = range.includes('A2') ? 1 : 0;
+      return lines.slice(startRow).map(line => {
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            values.push(current.trim().replace(/^"|"$/g, ''));
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        values.push(current.trim().replace(/^"|"$/g, ''));
         return values;
       });
     } catch (error) {
@@ -90,7 +115,21 @@ export class GoogleSheetsService {
    * H: insider_story（深層背景）- オプション
    */
   async getArtworksFromSheet(spreadsheetId: string): Promise<Painting[]> {
-    const artRaw = await this.fetchSheetData(spreadsheetId, 'art!A2:H');
+    // 複数のシート名を試す（art, ArtLens3_0102, 最初のシートなど）
+    const sheetNames = ['art', 'ArtLens3_0102', 'Sheet1'];
+    let artRaw: any[] = [];
+    
+    for (const sheetName of sheetNames) {
+      artRaw = await this.fetchSheetData(spreadsheetId, `${sheetName}!A2:H`);
+      if (artRaw.length > 0 && artRaw.some((row: any[]) => row[0] && row[1])) {
+        break; // データが見つかったら終了
+      }
+    }
+    
+    // どのシート名でもデータが取得できなかった場合、最初のシートを試す（シート名なし）
+    if (artRaw.length === 0 || !artRaw.some((row: any[]) => row[0] && row[1])) {
+      artRaw = await this.fetchSheetData(spreadsheetId, 'A2:H');
+    }
     
     return artRaw
       .filter((row: any[]) => row[0] && row[1]) // yearとtitle_jpが必須

@@ -1,0 +1,29 @@
+
+{
+  "name": "artistic-heartscape",
+  "version": "1.0.0",
+  "description": "An immersive art exploration tool that connects viewers to the era and emotions behind masterpieces.",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0",
+    "recharts": "^3.0.0",
+    "@google/genai": "^1.30.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  },
+  "keywords": ["art", "ai", "history", "gemini"],
+  "author": "Artistic Heartscape Team",
+  "license": "MIT"
+}

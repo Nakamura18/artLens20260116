@@ -20,8 +20,31 @@
 ## 🚀 セットアップ
 
 1. リポジトリをクローンします。
-2. `process.env.API_KEY` に Google Gemini の APIキーを設定してください。
-3. `index.html` をブラウザで開くか、ローカルサーバーを起動します。
+2. `npm install` で依存関係をインストールします。
+3. `.env.local` ファイルを作成し、`GEMINI_API_KEY=your_api_key` を設定してください。
+4. `npm run dev` でローカル開発サーバーを起動します。
+
+## 📦 GitHub Pagesへのデプロイ
+
+このプロジェクトはGitHub Actionsを使用して自動的にGitHub Pagesにデプロイされます。
+
+### 初回セットアップ
+
+1. **GitHubリポジトリの設定**:
+   - リポジトリの Settings → Pages に移動
+   - Source を "GitHub Actions" に設定
+
+2. **シークレットの設定**:
+   - リポジトリの Settings → Secrets and variables → Actions に移動
+   - "New repository secret" をクリック
+   - Name: `GEMINI_API_KEY`
+   - Value: あなたのGemini APIキー
+   - "Add secret" をクリック
+
+3. **デプロイの実行**:
+   - `main` ブランチにプッシュすると、自動的にビルドとデプロイが実行されます
+   - Actions タブでデプロイの進行状況を確認できます
+   - デプロイが完了すると、`https://mamna18.github.io/artistic_heartscape_guide/` でアクセスできます
 
 ---
 *Created with Gemini API*

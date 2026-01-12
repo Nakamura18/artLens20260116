@@ -22,7 +22,7 @@ export class GeminiService {
       return response.text || "解説を取得できませんでした。";
     } catch (error) {
       console.error("Gemini Error:", error);
-      return "タイムトラベル中にエラーが発生しました。";
+      return "解説取得中にエラーが発生しました。";
     }
   }
 

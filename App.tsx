@@ -17,7 +17,9 @@ import {
   Loader2,
   Image as ImageIcon,
   MapPin,
-  Building2
+  Building2,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 
 // 指定されたスプレッドシートIDをデフォルトに設定
@@ -33,6 +35,10 @@ const App: React.FC = () => {
   const [isLoadingInsiderStory, setIsLoadingInsiderStory] = useState(false);
   const [isGoogleSettingsOpen, setIsGoogleSettingsOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const [speechUtterance, setSpeechUtterance] = useState<SpeechSynthesisUtterance | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [isGeneratingTimeline, setIsGeneratingTimeline] = useState(false);
 
   // 全ての画家の作品を一つの所蔵リストとしてフラット化
   const allPaintings = useMemo(() => {
@@ -75,6 +81,54 @@ const App: React.FC = () => {
       setIsInitialLoading(false);
     }
   };
+
+  // OSに応じて音声を選択
+  useEffect(() => {
+    const selectVoiceByOS = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const japaneseVoices = voices.filter(v => v.lang.startsWith('ja'));
+      
+      // OSを検出
+      const userAgent = navigator.userAgent.toLowerCase();
+      const platform = navigator.platform.toLowerCase();
+      const isMac = platform.includes('mac') || userAgent.includes('mac');
+      const isWindows = platform.includes('win') || userAgent.includes('windows');
+      
+      let targetVoiceName = '';
+      if (isMac) {
+        // macOS: Kyokoを優先、なければ日本語の女性音声を探す
+        targetVoiceName = 'Kyoko';
+      } else if (isWindows) {
+        // Windows: Microsoft Harukaを優先、なければ日本語の女性音声を探す
+        targetVoiceName = 'Microsoft Haruka';
+      }
+      
+      // 指定された音声を探す
+      let selected = japaneseVoices.find(v => v.name.includes(targetVoiceName));
+      
+      // 見つからない場合は、日本語の女性音声を探す（KyokoやHaruka以外でも）
+      if (!selected && japaneseVoices.length > 0) {
+        // デフォルト音声を優先
+        selected = japaneseVoices.find(v => v.default) || japaneseVoices[0];
+      }
+      
+      if (selected) {
+        setSelectedVoice(selected);
+        console.log('選択された音声:', selected.name);
+      }
+    };
+    
+    // 音声リストが読み込まれるまで待つ
+    const loadVoices = () => {
+      selectVoiceByOS();
+    };
+    
+    // 初回読み込み
+    loadVoices();
+    
+    // 音声リストが非同期で読み込まれる場合があるため
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
 
   useEffect(() => {
     // 起動時に同期を実行（保存されたIDがなければデフォルトを使用）
@@ -123,11 +177,115 @@ const App: React.FC = () => {
     fetchInsiderStory();
   }, [selectedPainting, selectedArtist]);
 
+  // コンポーネントのアンマウント時に読み上げを停止
+  useEffect(() => {
+    return () => {
+      if (speechUtterance) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [speechUtterance]);
+
+  // 画家のtimelineが空の場合、AIで生成
+  useEffect(() => {
+    const generateTimelineIfNeeded = async () => {
+      if (!selectedArtist || !selectedArtist.name) return;
+      
+      // timelineが既にある場合はスキップ
+      if (selectedArtist.timeline && selectedArtist.timeline.length > 0) return;
+      
+      // 既に生成中の場合はスキップ
+      if (isGeneratingTimeline) return;
+      
+      setIsGeneratingTimeline(true);
+      
+      try {
+        const paintings = selectedArtist.paintings.map(p => ({
+          title: p.title,
+          year: p.year
+        }));
+        
+        const generatedTimeline = await geminiService.generateEmpathyTimeline(
+          selectedArtist.name,
+          selectedArtist.period || '',
+          selectedArtist.bio || '',
+          paintings
+        );
+        
+        if (generatedTimeline.length > 0) {
+          // 生成したtimelineをartistに追加
+          setArtists(prevArtists => 
+            prevArtists.map(artist => 
+              artist.id === selectedArtist.id
+                ? { ...artist, timeline: generatedTimeline }
+                : artist
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Failed to generate timeline:", error);
+      } finally {
+        setIsGeneratingTimeline(false);
+      }
+    };
+    
+    generateTimelineIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedArtist?.id]);
+
   const handlePaintingChange = (painting: Painting) => {
     setSelectedPainting(painting);
     setShowOverlays(false);
     setAiCommentary('');
     setAiInsiderStory('');
+    // 読み上げを停止
+    if (speechUtterance) {
+      window.speechSynthesis.cancel();
+      setIsReading(false);
+      setSpeechUtterance(null);
+    }
+  };
+
+  const handleReadAloud = () => {
+    const text = selectedPainting.insiderStory || aiInsiderStory;
+    if (!text || text.trim() === '' || text === '深層背景を取得中...') {
+      return;
+    }
+
+    // 既に読み上げ中の場合は停止
+    if (isReading && speechUtterance) {
+      window.speechSynthesis.cancel();
+      setIsReading(false);
+      setSpeechUtterance(null);
+      return;
+    }
+
+    // 新しい読み上げを開始
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 1.0; // 読み上げ速度（0.1-10、デフォルト1）
+    utterance.pitch = 1.0; // 音の高さ（0-2、デフォルト1）
+    utterance.volume = 1.0; // 音量（0-1、デフォルト1）
+    
+    // OSに応じて選択された音声を設定
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    utterance.onend = () => {
+      setIsReading(false);
+      setSpeechUtterance(null);
+    };
+
+    utterance.onerror = (error) => {
+      console.error('Speech synthesis error:', error);
+      setIsReading(false);
+      setSpeechUtterance(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+    setIsReading(true);
+    setSpeechUtterance(utterance);
   };
 
   return (
@@ -246,13 +404,29 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
               <div className="space-y-4">
                 <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 h-full flex flex-col shadow-inner">
-                  <div className="flex items-center gap-2 mb-4 text-amber-500">
-                    <BookOpen size={20} />
-                    <h3 className="font-bold">作品の深層背景</h3>
-                    {!selectedPainting.insiderStory && aiInsiderStory && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <Sparkles size={10} /> AI生成
-                      </span>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2 text-amber-500">
+                      <BookOpen size={20} />
+                      <h3 className="font-bold">作品の深層背景</h3>
+                      {!selectedPainting.insiderStory && aiInsiderStory && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Sparkles size={10} /> AI生成
+                        </span>
+                      )}
+                    </div>
+                    {(selectedPainting.insiderStory || aiInsiderStory) && 
+                     (selectedPainting.insiderStory || aiInsiderStory) !== '深層背景を取得中...' && (
+                      <button
+                        onClick={handleReadAloud}
+                        className={`p-2 rounded-lg transition-all ${
+                          isReading 
+                            ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30' 
+                            : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                        }`}
+                        title={isReading ? '読み上げを停止' : '音声で読み上げる'}
+                      >
+                        {isReading ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                      </button>
                     )}
                   </div>
                   
@@ -266,13 +440,13 @@ const App: React.FC = () => {
                       <p className="text-slate-500 text-xs">AIが深層背景を生成中...</p>
                     </div>
                   ) : (
-                    <p className="text-slate-300 text-sm leading-relaxed italic mb-8 border-l-2 border-amber-500/30 pl-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                    <p className="text-slate-300 text-base leading-relaxed italic mb-8 border-l-2 border-amber-500/30 pl-4 animate-in fade-in slide-in-from-bottom-2 duration-700" style={{ fontSize: '1rem' }}>
                       "{selectedPainting.insiderStory || aiInsiderStory || '深層背景を取得中...'}"
                     </p>
                   )}
                   
                   <div className="mt-auto pt-4 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-widest">
+                    <div className="flex items-center gap-2 font-bold text-slate-500 mb-3 uppercase tracking-widest" style={{ fontSize: '1em' }}>
                       <Sparkles size={12} className="text-amber-500" /> AI学芸員のエモーショナル解説
                     </div>
                     {isLoadingAi ? (
@@ -282,7 +456,7 @@ const App: React.FC = () => {
                         <div className="w-2 h-2 bg-amber-500/40 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                       </div>
                     ) : (
-                      <p className="text-slate-400 text-xs leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-700">
+                      <p className="text-slate-400 leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-700" style={{ fontSize: '1rem' }}>
                         {aiCommentary}
                       </p>
                     )}
@@ -294,10 +468,10 @@ const App: React.FC = () => {
               <div className="space-y-4">
                 <EmpathyTimeline artist={selectedArtist} currentYear={selectedPainting.year} />
                 <div className="p-5 bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10 rounded-2xl">
-                  <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <h4 className="font-bold text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-2" style={{ fontSize: '1em' }}>
                     <History size={12} /> 制作当時の画家の心
                   </h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-slate-400 leading-relaxed" style={{ fontSize: '1em' }}>
                     この作品は、画家の生涯において「{selectedArtist.timeline.find(m => m.year === selectedPainting.year)?.mood ?? '情熱'}」の波が訪れていた時期に描かれました。
                   </p>
                 </div>

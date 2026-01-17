@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
     // 開発環境ではbaseを空に、本番環境（GitHub Pages）ではパスを設定
     const isDev = mode === 'development';
     return {
-      base: isDev ? '/' : '/artistic_heartscape_guide/',
+      base: isDev ? '/' : '/artLens20260116/',
       server: {
         port: 3000,
         host: '0.0.0.0',

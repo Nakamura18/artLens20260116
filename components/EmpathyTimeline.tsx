@@ -1,11 +1,19 @@
 
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Dot, CartesianGrid } from 'recharts';
-import { Artist, Milestone } from '../types';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Dot, CartesianGrid, TooltipProps } from 'recharts';
+import { Artist } from '../types';
 
 interface EmpathyTimelineProps {
   artist: Artist;
   currentYear: number;
+}
+
+interface TimelineDataPoint {
+  year: number;
+  mood: number;
+  event: string;
+  description: string;
+  color?: string;
 }
 
 const EmpathyTimeline: React.FC<EmpathyTimelineProps> = ({ artist, currentYear }) => {
@@ -55,19 +63,9 @@ const EmpathyTimeline: React.FC<EmpathyTimelineProps> = ({ artist, currentYear }
   // 作品の制作年を取得（全ての作品の年を表示、重複を除去）
   const paintingYears = [...new Set(artist.paintings?.map(p => p.year) || [])].sort((a, b) => a - b);
 
-  // デバッグ用: データを確認
-  console.log('EmpathyTimeline Debug:', {
-    artist: artist.name,
-    timelineLength: sortedTimeline.length,
-    data: data,
-    minYear,
-    maxYear,
-    paintingYears
-  });
-
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const data = payload[0].payload as TimelineDataPoint;
       return (
         <div className="bg-slate-900/90 border border-slate-700 p-3 rounded-lg shadow-xl backdrop-blur-md max-w-xs">
           <p className="text-sm font-bold text-amber-400">{data.year}年</p>

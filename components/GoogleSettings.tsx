@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Database, ExternalLink, Info, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Database, Info, AlertCircle, Loader2 } from 'lucide-react';
 
 interface GoogleSettingsProps {
   isOpen: boolean;

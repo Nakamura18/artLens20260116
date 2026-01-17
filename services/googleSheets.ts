@@ -1,34 +1,35 @@
-
 import { Artist, Painting, Milestone, OverlayNote } from '../types';
+import { ARTISTS as DEFAULT_ARTISTS } from '../data/mockData';
 
 // Vite環境変数を使用（VITE_プレフィックスが必要）
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || '';
 
-// ゴッホのデフォルト情報（スプレッドシートにArtistsシートがない場合のフォールバック）
-const DEFAULT_ARTIST: Artist = {
+// デフォルトアーティスト（mockData.tsから取得）
+const DEFAULT_ARTIST: Artist = DEFAULT_ARTISTS[0] || {
   id: 'van-gogh',
   name: 'Vincent van Gogh',
   period: 'Post-Impressionism (1853-1890)',
   bio: 'オランダの画家。情熱的で鮮やかな色彩と大胆な筆致で知られ、現代美術に多大な影響を与えた。',
   avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Vincent_van_Gogh_-_Self-Portrait_-_Google_Art_Project.jpg/800px-Vincent_van_Gogh_-_Self-Portrait_-_Google_Art_Project.jpg',
-  timeline: [
-    { year: 1880, event: '画家の道を志す', mood: 2, description: '伝道師としての挫折の後、絵画の世界へ。', category: 'personal' },
-    { year: 1885, event: '「ジャガイモを食べる人々」制作', mood: -1, description: '農民の貧しさと力強さを描く暗い時代。', category: 'artistic' },
-    { year: 1886, event: 'パリ移住', mood: 3, description: '印象派との出会い。色彩が劇的に明るくなる。', category: 'personal' },
-    { year: 1888, event: 'アルルへ移動', mood: 5, description: '「黄色い家」での共同生活。創作意欲の頂点。', category: 'personal' },
-    { year: 1888, event: '耳切り事件', mood: -5, description: 'ゴーギャンとの衝突、精神の崩壊が始まる。', category: 'personal' },
-    { year: 1889, event: 'サン＝レミの療養院', mood: -2, description: '「星月夜」を制作。苦悩の中の安らぎ。', category: 'artistic' },
-    { year: 1890, event: 'オーヴェール＝シュル＝オワーズ', mood: -4, description: '最後の傑作群を残し、37歳でこの世を去る。', category: 'personal' }
-  ],
+  timeline: [],
   paintings: [],
 };
+
+type MilestoneCategory = 'personal' | 'historical' | 'artistic';
+
+function validateCategory(value: string | undefined): MilestoneCategory {
+  if (value === 'personal' || value === 'historical' || value === 'artistic') {
+    return value;
+  }
+  return 'personal';
+}
 
 export class GoogleSheetsService {
   private hasApiKey(): boolean {
     return !!API_KEY && API_KEY.length > 0;
   }
 
-  private async fetchSheetData(spreadsheetId: string, range: string): Promise<any[]> {
+  private async fetchSheetData(spreadsheetId: string, range: string): Promise<string[][]> {
     // APIキーがある場合はGoogle Sheets APIを使用
     if (this.hasApiKey()) {
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${API_KEY}`;
@@ -47,25 +48,25 @@ export class GoogleSheetsService {
         return await this.fetchSheetDataCSV(spreadsheetId, range);
       }
     }
-    
+
     // APIキーがない場合はCSVエクスポートを使用（公開スプレッドシートの場合）
     return await this.fetchSheetDataCSV(spreadsheetId, range);
   }
 
-  private async fetchSheetDataCSV(spreadsheetId: string, range: string): Promise<any[]> {
+  private async fetchSheetDataCSV(spreadsheetId: string, range: string): Promise<string[][]> {
     // 範囲からシート名を抽出（例: 'art!A2:H' -> 'art'）
     let sheetName = range.split('!')[0];
     // シート名がない場合は空文字（最初のシート）
     if (!sheetName || sheetName === range) {
       sheetName = '';
     }
-    
+
     // CSVエクスポートURL（シート名がある場合は指定、ない場合は最初のシート）
     let url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
     if (sheetName) {
       url += `&sheet=${encodeURIComponent(sheetName)}`;
     }
-    
+
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -81,7 +82,7 @@ export class GoogleSheetsService {
         const values: string[] = [];
         let current = '';
         let inQuotes = false;
-        
+
         for (let i = 0; i < line.length; i++) {
           const char = line[i];
           if (char === '"') {
@@ -117,23 +118,23 @@ export class GoogleSheetsService {
   async getArtworksFromSheet(spreadsheetId: string): Promise<Painting[]> {
     // 複数のシート名を試す（art, ArtLens3_0102, 最初のシートなど）
     const sheetNames = ['art', 'ArtLens3_0102', 'Sheet1'];
-    let artRaw: any[] = [];
-    
+    let artRaw: string[][] = [];
+
     for (const sheetName of sheetNames) {
       artRaw = await this.fetchSheetData(spreadsheetId, `${sheetName}!A2:H`);
-      if (artRaw.length > 0 && artRaw.some((row: any[]) => row[0] && row[1])) {
+      if (artRaw.length > 0 && artRaw.some(row => row[0] && row[1])) {
         break; // データが見つかったら終了
       }
     }
-    
+
     // どのシート名でもデータが取得できなかった場合、最初のシートを試す（シート名なし）
-    if (artRaw.length === 0 || !artRaw.some((row: any[]) => row[0] && row[1])) {
+    if (artRaw.length === 0 || !artRaw.some(row => row[0] && row[1])) {
       artRaw = await this.fetchSheetData(spreadsheetId, 'A2:H');
     }
-    
+
     return artRaw
-      .filter((row: any[]) => row[0] && row[1]) // yearとtitle_jpが必須
-      .map((row: any[], index: number) => ({
+      .filter(row => row[0] && row[1]) // yearとtitle_jpが必須
+      .map((row, index) => ({
         id: `artwork-${index + 1}`,
         year: parseInt(row[0]) || 0,
         title: row[1] || 'Untitled',
@@ -151,7 +152,7 @@ export class GoogleSheetsService {
     try {
       // まずartシートから作品データを取得
       const paintings = await this.getArtworksFromSheet(spreadsheetId);
-      
+
       // Artistsシートが存在するか確認して取得を試みる
       let artists: Artist[] = [];
       let timelineMilestones: (Milestone & { artistId: string })[] = [];
@@ -165,7 +166,7 @@ export class GoogleSheetsService {
         ]);
 
         // 画家情報のパース
-        artists = artistsRaw.filter((r: any[]) => r[0]).map((row: any[]) => ({
+        artists = artistsRaw.filter(r => r[0]).map(row => ({
           id: row[0],
           name: row[1] || 'Unknown Artist',
           period: row[2] || '',
@@ -176,17 +177,17 @@ export class GoogleSheetsService {
         }));
 
         // 感情年表のパース
-        timelineMilestones = timelineRaw.filter((r: any[]) => r[0]).map((row: any[]) => ({
+        timelineMilestones = timelineRaw.filter(r => r[0]).map(row => ({
           artistId: row[0],
           year: parseInt(row[1]) || 0,
           event: row[2] || '',
           mood: parseInt(row[3]) || 0,
           description: row[4] || '',
-          category: (row[5] as any) || 'personal',
+          category: validateCategory(row[5]),
         }));
 
         // オーバーレイ注釈のパース
-        overlays = overlaysRaw.filter((r: any[]) => r[0]).map((row: any[]) => ({
+        overlays = overlaysRaw.filter(r => r[0]).map(row => ({
           paintingId: row[0],
           id: row[1],
           x: parseFloat(row[2]) || 0,
@@ -195,7 +196,7 @@ export class GoogleSheetsService {
           content: row[5] || '',
         }));
       } catch (e) {
-        console.log('Optional sheets (Artists/Timeline/Overlays) not found, using defaults');
+        console.warn('Optional sheets (Artists/Timeline/Overlays) not found, using defaults');
       }
 
       // アーティストがいない場合はデフォルトを使用

@@ -28,17 +28,19 @@
 
 このプロジェクトには Firebase Functions 用の Gemini プロキシを同梱しています。
 
-### 必要な環境変数（バックエンド）
+### 必要な設定値（バックエンド / 無料プラン）
 
-- `GEMINI_API_KEY`: Gemini API キー
-- `ALLOWED_ORIGINS`: 許可するオリジン（例: `http://localhost:3000,https://nakamura18.github.io`）
+- `gemini.api_key`: Gemini API キー
+- `app.allowed_origins`: 許可するオリジン（例: `http://localhost:3000,https://nakamura18.github.io`）
 
 ### ローカル開発（Functions）
 
 1. `firebase login` でログイン
 2. `firebase use <your-project-id>`
-3. `cd functions && npm install && npm run build`
-4. `firebase emulators:start --only functions`
+3. `firebase functions:config:set gemini.api_key="YOUR_GEMINI_API_KEY"`
+4. `firebase functions:config:set app.allowed_origins="http://localhost:3000,https://nakamura18.github.io"`
+5. `cd functions && npm install && npm run build`
+6. `firebase emulators:start --only functions`
 
 ### フロント側の設定
 

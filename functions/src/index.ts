@@ -1,4 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
+import { config } from 'firebase-functions';
 
 interface GeminiRequest {
   type: 'commentary' | 'insiderStory' | 'timeline';
@@ -23,6 +24,8 @@ interface GeminiResponse {
   }>;
   error?: string;
 }
+
+const appConfig = config();
 
 // 簡易レートリミット
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -161,7 +164,7 @@ export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) 
     return;
   }
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
+  const allowedOrigins = appConfig.app?.allowed_origins || '*';
   const origin = req.get('origin');
   if (!validateOrigin(origin, allowedOrigins)) {
     res.status(403).json({ success: false, error: 'Origin not allowed' });
@@ -175,7 +178,7 @@ export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) 
   }
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    const apiKey = appConfig.gemini?.api_key || '';
     const request = req.body as GeminiRequest;
     const result = await handleGeminiRequest(request, apiKey);
     res.set('Access-Control-Allow-Origin', origin || '*');
@@ -184,4 +187,5 @@ export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) 
     console.error('Gemini Handler Error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+  }
+);

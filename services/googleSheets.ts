@@ -143,7 +143,8 @@ export class GoogleSheetsService {
         collection: row[4] || '',
         imageUrl: row[5] || 'https://via.placeholder.com/800x600?text=' + encodeURIComponent(row[1] || 'Artwork'),
         description: row[6] || `${row[3] || ''}で制作された作品。現在${row[4] || '所蔵先不明'}に所蔵されています。`,
-        insiderStory: row[7] || '',
+        // 空白だけのセルは未設定として扱う
+        insiderStory: row[7]?.trim() || '',
         overlays: [],
       }));
   }

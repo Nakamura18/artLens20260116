@@ -31,7 +31,7 @@ const InsiderStoryPanel: React.FC<InsiderStoryPanelProps> = ({
   isReading,
   onToggleReadAloud,
 }) => {
-  const displayStory = painting.insiderStory || insiderStory;
+  const displayStory = (painting.insiderStory || insiderStory || '').trim();
   const hasStory =
     displayStory && displayStory.trim() !== '' && displayStory !== '深層背景を取得中...';
 

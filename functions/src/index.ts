@@ -1,5 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https';
-import { config } from 'firebase-functions';
+import { defineSecret } from 'firebase-functions/params';
 
 interface GeminiRequest {
   type: 'commentary' | 'insiderStory' | 'timeline';
@@ -25,7 +25,8 @@ interface GeminiResponse {
   error?: string;
 }
 
-const appConfig = config();
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
+const allowedOriginsSecret = defineSecret('ALLOWED_ORIGINS');
 
 // 簡易レートリミット
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -150,7 +151,9 @@ async function handleGeminiRequest(
   return { success: true, data: text };
 }
 
-export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) => {
+export const gemini = onRequest(
+  { region: 'asia-northeast1', secrets: [geminiApiKey, allowedOriginsSecret] },
+  async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.set('Access-Control-Allow-Origin', req.get('origin') || '*');
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -164,7 +167,7 @@ export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) 
     return;
   }
 
-  const allowedOrigins = appConfig.app?.allowed_origins || '*';
+  const allowedOrigins = allowedOriginsSecret.value() || '*';
   const origin = req.get('origin');
   if (!validateOrigin(origin, allowedOrigins)) {
     res.status(403).json({ success: false, error: 'Origin not allowed' });
@@ -178,7 +181,7 @@ export const gemini = onRequest({ region: 'asia-northeast1' }, async (req, res) 
   }
 
   try {
-    const apiKey = appConfig.gemini?.api_key || '';
+    const apiKey = geminiApiKey.value() || '';
     const request = req.body as GeminiRequest;
     const result = await handleGeminiRequest(request, apiKey);
     res.set('Access-Control-Allow-Origin', origin || '*');

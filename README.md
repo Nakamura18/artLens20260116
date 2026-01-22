@@ -21,8 +21,31 @@
 
 1. リポジトリをクローンします。
 2. `npm install` で依存関係をインストールします。
-3. `.env.local` ファイルを作成し、`GEMINI_API_KEY=your_api_key` を設定してください。
+3. `.env.local` を作成し、`VITE_GEMINI_API_URL=your_backend_url` を設定してください。
 4. `npm run dev` でローカル開発サーバーを起動します。
+
+## 🔐 Gemini API をバックエンドに隠す（推奨）
+
+このプロジェクトには Firebase Functions 用の Gemini プロキシを同梱しています。
+
+### 必要な環境変数（バックエンド）
+
+- `GEMINI_API_KEY`: Gemini API キー
+- `ALLOWED_ORIGINS`: 許可するオリジン（例: `http://localhost:3000,https://nakamura18.github.io`）
+
+### ローカル開発（Functions）
+
+1. `firebase login` でログイン
+2. `firebase use <your-project-id>`
+3. `cd functions && npm install && npm run build`
+4. `firebase emulators:start --only functions`
+
+### フロント側の設定
+
+`.env.local` に Functions の URL を設定します。
+
+例（エミュレータ）:
+`VITE_GEMINI_API_URL=http://127.0.0.1:5001/<project-id>/asia-northeast1/gemini`
 
 ## 📦 GitHub Pagesへのデプロイ
 
@@ -34,12 +57,8 @@
    - リポジトリの Settings → Pages に移動
    - Source を "GitHub Actions" に設定
 
-2. **シークレットの設定**:
-   - リポジトリの Settings → Secrets and variables → Actions に移動
-   - "New repository secret" をクリック
-   - Name: `GEMINI_API_KEY`
-   - Value: あなたのGemini APIキー
-   - "Add secret" をクリック
+2. **シークレットの設定**（Functions で利用する場合）:
+   - Firebase Functions に `GEMINI_API_KEY` を設定してください
 
 3. **デプロイの実行**:
    - `main` ブランチにプッシュすると、自動的にビルドとデプロイが実行されます
